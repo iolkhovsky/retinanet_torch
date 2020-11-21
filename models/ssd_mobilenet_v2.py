@@ -7,6 +7,7 @@ from models.mobilenet_v2 import SSDBackboneMobilenetv2
 class SSDMobilenet2(nn.Module):
 
     def __init__(self, anchors_cnt=6, classes_cnt=21):
+        super(SSDMobilenet2, self).__init__()
         self.anchors, self.classes = anchors_cnt, classes_cnt
         self.backbone = SSDBackboneMobilenetv2(alpha=1., pretrained=True, requires_grad=True)
         self.classification_heads = [
@@ -26,8 +27,8 @@ class SSDMobilenet2(nn.Module):
             SSDRegressionHead(in_channels=640, anchors_cnt=anchors_cnt, kernel=1, pad=0)
         ]
 
-    def forward(self):
-        pass
+    def forward(self, x):
+        return x
 
     def __str__(self):
         feature_maps = len(self.classification_heads)
