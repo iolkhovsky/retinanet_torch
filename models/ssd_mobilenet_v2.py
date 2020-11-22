@@ -21,7 +21,7 @@ class SSDMobilenet2(nn.Module):
 
     def forward(self, x):
         feature_maps = self.backbone(x)
-        return [predictor(feature_maps) for predictor, feature_map in zip(self.predictor_heads, feature_maps)]
+        return [predictor(feature_map) for predictor, feature_map in zip(self.predictor_heads, feature_maps)]
 
     def __str__(self):
         feature_maps = len(self.classification_heads)
