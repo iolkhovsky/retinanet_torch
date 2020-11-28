@@ -10,6 +10,7 @@ EPSILON = 1e-6
 class FasterRCNNBoxCoder(nn.Module):
 
     def __init__(self, scale_factors=[10., 10., 5., 5.]):
+        super(FasterRCNNBoxCoder, self).__init__()
         if scale_factors:
             assert len(scale_factors) == 4
             for scalar in scale_factors:

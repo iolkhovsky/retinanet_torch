@@ -2,33 +2,25 @@ import numpy as np
 import pytest
 import torch
 
-from models.ssd_loss import SSDRegressionLoss, FocalLoss
+from models.bbox_codec import FasterRCNNBoxCoder
+from models.ssd_loss import SSDLoss
 
 
-def test_ssd_regression_loss():
-    preds = np.asarray([(0, 0, 2, 2), (1, 1, 4, 5), (2, 3, 4, 5), (3, 4, 5, 6)], dtype=np.float32)
-    target = np.asarray([(0.5, 0.7, 2.3, 2.4), (3, 3, 10, 7), (3, 3, 5, 8), (3, 4, 5, 6)], dtype=np.float32)
-    target_loss = []
-    for p, t in zip(preds.flatten(), target.flatten()):
-        if abs(p - t) < 1.:
-            target_loss.append(0.5 * abs(p-t) ** 2)
-        else:
-            target_loss.append(abs(p - t) - 0.5)
-    target_loss = np.asarray(target_loss).mean()
-    pred_tensor = torch.from_numpy(preds).view(2, 2, 4)
-    target_tensor = torch.from_numpy(target).view(2, 2, 4)
-    criterion = SSDRegressionLoss()
-    loss = criterion.forward(predicted_boxes=pred_tensor, target_boxes=target_tensor)
-    assert loss.item() == pytest.approx(target_loss, 1e-3)
+def test_ssd_loss():
+    coder = FasterRCNNBoxCoder()
+    criterion = SSDLoss(box_codec=coder, anchors_cnt=2, classes_cnt=3)
 
+    anchors = torch.from_numpy(
+        np.asarray([(10, 10, 100, 20), (10, 50, 20, 100), (100, 100, 100, 20), (100, 10, 30, 100)]))
+    ground_truth_boxes = torch.from_numpy(
+        np.asarray([(8, 8, 90, 20), (95, 10, 25, 95)]))
+    ground_truth_labels = torch.from_numpy(np.asarray([1, 2]))
 
-def test_focal_loss():
-    criterion = FocalLoss(logits=True)
-    pred = torch.from_numpy(np.asarray([[0.2, 9., 3.], [-4, 2, 10]], dtype=np.float32))
-    target = torch.from_numpy(np.asarray([[0, 1, 0], [0, 1, 0]], dtype=np.float32))
-    loss = criterion(inputs=pred, targets=target)
-    print(loss)
+    pred_boxes = torch.from_numpy(
+        np.asarray([(10, 10, 100, 20), (5, 55, 25, 80), (90, 105, 115, 15), (97, 9, 30, 110)]))
+    pred_boxes_encoded = coder.encode(pred_boxes, anchors)
+    pred_labels = torch.from_numpy(
+        np.asarray([(0.2, 0.55, 0.01), (0.01, 0.2, 0.15), (0.015, 0.4, 0.2), (0.1, 0.2, 0.6)]))
 
-
-if __name__ == "__main__":
-    test_focal_loss()
+    total, classification, regression = criterion(classification_preds=pred_labels, boxes_preds=pred_boxes_encoded, anchors=anchors,
+                     target_boxes=ground_truth_boxes, target_labels=ground_truth_labels)
