@@ -1,7 +1,7 @@
 import pytest
 import torch
 
-from models.ssd_mobilenet_v2 import SSDMobilenet2
+from models.ssd_mobilenet_v2 import SSDMobilenet2, SSDLightning
 
 
 def test_ssd_mobilenet():
@@ -26,5 +26,13 @@ def test_ssd_mobilenet():
         assert target_rgr_size == rgr_output_size
 
 
+def test_ssd_mobilene_tl():
+    ssd = SSDLightning(classes_cnt=21)
+    x = torch.rand(4, 3, 300, 300)
+    res = ssd.forward(x)
+    print(res)
+
+
 if __name__ == "__main__":
     test_ssd_mobilenet()
+    test_ssd_mobilene_tl()
