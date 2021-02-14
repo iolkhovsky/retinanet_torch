@@ -27,10 +27,19 @@ def test_ssd_mobilenet():
 
 
 def test_ssd_mobilene_tl():
-    ssd = SSDLightning(classes_cnt=21)
-    x = torch.rand(4, 3, 300, 300)
+    classes_cnt = 21
+    ssd = SSDLightning(classes_cnt=classes_cnt)
+    batch_size = 4
+    x = torch.rand(batch_size, 3, 300, 300)
     res = ssd.forward(x)
-    print(res)
+    assert len(res) == batch_size
+    for img_idx, (clf_scores, bboxes) in enumerate(res):
+        assert type(clf_scores) == list
+        assert len(clf_scores)
+        assert len(clf_scores[0]) == classes_cnt
+        assert type(bboxes) == list
+        assert len(bboxes)
+        assert len(bboxes[0]) == 4
 
 
 if __name__ == "__main__":
