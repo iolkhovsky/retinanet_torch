@@ -1,4 +1,6 @@
 data/
+lightning_logs/
+
 # Created by https://www.toptal.com/developers/gitignore/api/python,pycharm,venv,virtualenv,jupyternotebooks
 # Edit at https://www.toptal.com/developers/gitignore?templates=python,pycharm,venv,virtualenv,jupyternotebooks
 

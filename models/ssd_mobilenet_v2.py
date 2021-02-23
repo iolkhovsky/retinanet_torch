@@ -1,7 +1,9 @@
 import torch
 import torch.nn as nn
 import pytorch_lightning as pl
+from torch.utils.data import DataLoader
 
+from dataset.utils import build_voc2012_for_ssd300, collate_voc2012
 from models.mobilenet_v2 import SSDBackboneMobilenetv2
 from models.ssd_predictor import SSDPredictor
 from models.bbox_codec import FasterRCNNBoxCoder
@@ -33,7 +35,7 @@ class SSDMobilenet2(nn.Module):
         return f"SSD_Mobilenetv2_{feature_maps}fm_{self.classes}c_{self.anchors}a"
 
 
-class SSDLightning(pl.LightningDataModule):
+class SSDLightning(pl.LightningModule):
 
     def __init__(self, classes_cnt=21):
         super().__init__()
@@ -49,12 +51,13 @@ class SSDLightning(pl.LightningDataModule):
         img_size = 300
         for map_size in [38, 19, 10, 5, 3, 1]:
             self.anchors.append(self.anchor_gen.generate(img_size, map_size))
+        self.all_anchors = [torch.as_tensor(anchor) for map_anchors in self.anchors for anchor in map_anchors]
+        self.all_anchors = torch.stack(self.all_anchors)
         self.max_predictions_per_map = 100
 
-    def forward(self, x):
+    def inference(self, x, only_top=True):
         assert len(x.size()) == 4
-        with torch.no_grad():
-            predictions = self.ssd(x)
+        predictions = self.ssd(x)
         assert predictions is not None
         batch_size = x.shape[0]
         inference_output = [[] for i in range(batch_size)]
@@ -67,30 +70,54 @@ class SSDLightning(pl.LightningDataModule):
                 fmap_rgr = fmap_rgr.permute(1, 2, 0).reshape(-1, 4)
                 inference_output[imd_idx].append((fmap_clf, fmap_rgr))
 
-        detections = [([], [])] * batch_size
+        detections = [([], []) for _ in range(batch_size)]
         for img_idx, img_predictions in enumerate(inference_output):
             for fmap_predictions, anchors in zip(img_predictions, self.anchors):
                 clf_pred, rgr_pred = fmap_predictions
-                print(len(clf_pred), len(rgr_pred), len(anchors))
                 assert len(clf_pred) == len(rgr_pred) == len(anchors)
                 max_confs, _ = torch.max(clf_pred[:, 1:], dim=1)
                 anchors = torch.as_tensor(anchors)
-                
-                _, clf_pred, rgr_pred, anchors = zip(*sorted(zip(max_confs, clf_pred, rgr_pred, anchors), reverse=True,
-                                                             key=lambda x: x[0]))
-                max_predictions = min(len(rgr_pred), self.max_predictions_per_map)
-                clf_pred, rgr_pred, anchors = list(clf_pred), list(rgr_pred), list(anchors)
-                clf_pred, rgr_pred, anchors = torch.stack(clf_pred), torch.stack(rgr_pred), torch.stack(anchors)
-                boxes = self.box_coder.decode(rgr_pred[:max_predictions], anchors[:max_predictions])
-                detections[img_idx][0].extend(clf_pred[:max_predictions])
-                detections[img_idx][1].extend(boxes)
+
+                if only_top:
+                    _, clf_pred, rgr_pred, anchors = zip(*sorted(zip(max_confs, clf_pred, rgr_pred, anchors),
+                                                                 reverse=True,
+                                                                 key=lambda x: x[0]))
+                    max_predictions = min(len(rgr_pred), self.max_predictions_per_map)
+                    clf_pred, rgr_pred, anchors = list(clf_pred), list(rgr_pred), list(anchors)
+                    clf_pred, rgr_pred, anchors = torch.stack(clf_pred), torch.stack(rgr_pred), torch.stack(anchors)
+
+                    boxes = self.box_coder.decode(rgr_pred[:max_predictions], anchors[:max_predictions])
+                    detections[img_idx][0].extend(clf_pred[:max_predictions])
+                    detections[img_idx][1].extend(boxes)
+                else:
+                    boxes = self.box_coder.decode(rgr_pred, anchors)
+                    detections[img_idx][0].extend(clf_pred)
+                    detections[img_idx][1].extend(boxes)
 
         return detections
 
-    def training_step(self, batch, batch_idx):
-        inputs, labels = batch
+    def forward(self, x):
+        with torch.no_grad():
+            detections = self.inference(x)
+        return detections
 
-        pass
+    def training_step(self, batch, batch_idx):
+        inputs, targets = batch
+        detections = self.inference(inputs, only_top=False)
+
+        batch_loss = 0.
+        for img_detections, img_targets in zip(detections, targets):
+            pred_confidences, pred_boxes = img_detections
+            target_boxes = img_targets["boxes"]
+            target_labels = img_targets["labels"]
+            total, classification, regression = self.criterion(classification_preds=pred_confidences,
+                                                               boxes_preds=pred_boxes,
+                                                               anchors=self.all_anchors,
+                                                               target_boxes=target_boxes,
+                                                               target_labels=target_labels)
+            batch_loss += total
+        batch_loss /= len(batch)
+        return batch_loss
 
     def validation_step(self, batch, batch_idx):
         pass
@@ -101,3 +128,9 @@ class SSDLightning(pl.LightningDataModule):
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.parameters(), lr=1e-3)
         return optimizer
+
+    def train_dataloader(self):
+        return DataLoader(build_voc2012_for_ssd300(subset="train"), batch_size=2, collate_fn=collate_voc2012)
+
+    def val_dataloader(self):
+        return DataLoader(build_voc2012_for_ssd300(subset="val"), batch_size=2, collate_fn=collate_voc2012)

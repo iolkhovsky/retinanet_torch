@@ -1,6 +1,8 @@
 import torchvision
 from bounding_box import bounding_box as bb
 
+from utils.transforms import *
+
 
 COLORS = ("navy", "blue", "aqua", "teal", "olive", "green", "lime", "yellow", "orange", "red", "maroon", "fuchsia",
           "purple", "black", "gray", "silver")
@@ -56,7 +58,44 @@ def visualize_voc_annotation(img, voc_xml_annotation):
     return out
 
 
-def build_voc2012(root="../data", subset="train"):
-    return torchvision.datasets.VOCDetection(root=root, year="2012", image_set=subset, download=True)
+def parse_annotation(voc_annotation_dict, scale_x=1., scale_y=1.):
+    label = voc_annotation_dict["name"]
+    x = float(voc_annotation_dict["bndbox"]["xmin"])
+    y = float(voc_annotation_dict["bndbox"]["ymin"])
+    w = float(voc_annotation_dict["bndbox"]["xmax"]) - x + 1
+    h = float(voc_annotation_dict["bndbox"]["ymax"]) - y + 1
+    return label, VOC_CLASSES[label]["id"], (int(x * scale_x), int(y * scale_y), int(w * scale_x), int(h * scale_y))
 
 
+def transform_voc_item_ssd300(input, target):
+    width, height = input.size
+    scale_x = 300. / width
+    scale_y = 300. / height
+    cv_img = pil_to_cv_img(input)
+    cv_img = cv2.resize(cv_img, (300, 300))
+    rgb_img = cv2.cvtColor(cv_img, cv2.COLOR_BGR2RGB)
+    rgb_img = rgb_img.astype(np.float32)
+    rgb_img = rgb_img * 1./255.
+    rgb_img = normalize_image(rgb_img, mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+    cyx_img = ndarray_yxc2cyx(rgb_img)
+    input_tensor = torch.from_numpy(cyx_img)
+    target_objects = [parse_annotation(x, scale_x, scale_y) for x in target["annotation"]["object"]]
+    target_boxes = torch.from_numpy(np.asarray([x[2] for x in target_objects]))
+    target_labels = torch.from_numpy(np.asarray([x[1] for x in target_objects]))
+    return input_tensor, {"boxes": target_boxes, "labels": target_labels}
+
+
+def build_voc2012_for_ssd300(root="../data", subset="train"):
+    return torchvision.datasets.VOCDetection(root=root,
+                                             year="2012",
+                                             image_set=subset,
+                                             download=True,
+                                             transforms=transform_voc_item_ssd300)
+
+
+def collate_voc2012(data):
+    batch_inputs, batch_targets = [], []
+    for input, targets_dict in data:
+        batch_inputs.append(input)
+        batch_targets.append(targets_dict)
+    return torch.stack(batch_inputs), batch_targets

@@ -31,3 +31,8 @@ def pil_to_cv_img(pil_img):
     return cv2.cvtColor(pil_to_array(pil_img), cv2.COLOR_RGB2BGR)
 
 
+def normalize_image(rgb_img, mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]):
+    rgb_img[:, :, 0] = (rgb_img[:, :, 0] - mean[0]) / std[0]
+    rgb_img[:, :, 1] = (rgb_img[:, :, 1] - mean[1]) / std[1]
+    rgb_img[:, :, 2] = (rgb_img[:, :, 2] - mean[2]) / std[2]
+    return rgb_img
