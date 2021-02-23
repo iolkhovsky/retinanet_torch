@@ -1,3 +1,4 @@
+import cv2
 import numpy as np
 import torch
 
@@ -20,3 +21,13 @@ def one_hot_encoding(labels, num_classes):
     """
     y = torch.eye(num_classes)
     return y[labels]
+
+
+def pil_to_array(pil_img):
+    return np.array(pil_img)
+
+
+def pil_to_cv_img(pil_img):
+    return cv2.cvtColor(pil_to_array(pil_img), cv2.COLOR_RGB2BGR)
+
+
