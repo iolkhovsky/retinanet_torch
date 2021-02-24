@@ -24,15 +24,15 @@ class FasterRCNNBoxCoder(nn.Module):
         boxes_x, boxes_y, boxes_w, boxes_h = torch.unbind(torch.transpose(centered_boxes, 0, 1))
         anchors_x, anchors_y, anchors_w, anchors_h = torch.unbind(torch.transpose(centered_anchors, 0, 1))
 
-        anchors_h += EPSILON
-        anchors_w += EPSILON
-        boxes_h += EPSILON
-        boxes_w += EPSILON
+        anchors_height = anchors_h + EPSILON
+        anchors_width = anchors_w + EPSILON
+        boxes_height = boxes_h + EPSILON
+        boxes_width = boxes_w + EPSILON
 
-        tx = (boxes_x - anchors_x) / anchors_w
-        ty = (boxes_y - anchors_y) / anchors_h
-        tw = torch.log(boxes_w / anchors_w)
-        th = torch.log(boxes_h / anchors_h)
+        tx = (boxes_x - anchors_x) / anchors_width
+        ty = (boxes_y - anchors_y) / anchors_height
+        tw = torch.log(boxes_width / anchors_width)
+        th = torch.log(boxes_height / anchors_height)
 
         if self._scale_factors:
             tx *= self._scale_factors[0]

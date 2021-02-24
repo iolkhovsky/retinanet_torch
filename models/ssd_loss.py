@@ -42,9 +42,10 @@ class SSDLoss(nn.Module):
                                                    num_classes=self.classes_cnt).float()
         classification_targets[positive_anchors_mask] = target_confidences
         classification_loss = self.classification_criterion(classification_preds, classification_targets)
-        classification_loss = torch.sum(classification_loss) / positive_anchors_cnt
+        classification_loss = torch.mean(classification_loss) / positive_anchors_cnt
 
-        predicted_positive_boxes = boxes_preds[positive_anchors_mask]
+        encoded_boxes_preds = self.box_codec.encode(boxes_preds, anchors)
+        predicted_positive_boxes = encoded_boxes_preds[positive_anchors_mask]
         target_boxes_ids = target_ids_for_anchors[positive_anchors_mask]
         target_boxes_for_positives = target_boxes[target_boxes_ids]
         anchors_for_positives = anchors[positive_anchors_mask]

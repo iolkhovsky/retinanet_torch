@@ -55,12 +55,12 @@ class SSDLightning(pl.LightningModule):
         self.all_anchors = torch.stack(self.all_anchors)
         self.max_predictions_per_map = 100
 
-    def inference(self, x, only_top=True):
+    def predict(self, x):
         assert len(x.size()) == 4
         predictions = self.ssd(x)
         assert predictions is not None
         batch_size = x.shape[0]
-        inference_output = [[] for i in range(batch_size)]
+        inference_output = [[] for _ in range(batch_size)]
 
         for head_idx, head_prediction in enumerate(predictions):
             clf_pred, rgr_pred = head_prediction
@@ -69,41 +69,58 @@ class SSDLightning(pl.LightningModule):
                 fmap_clf = fmap_clf.permute(1, 2, 0).reshape(-1, self.classes_cnt)
                 fmap_rgr = fmap_rgr.permute(1, 2, 0).reshape(-1, 4)
                 inference_output[imd_idx].append((fmap_clf, fmap_rgr))
+        return inference_output
 
+    def decode_output(self, x):
+        assert isinstance(x, list)
+        batch_size = len(x)
         detections = [([], []) for _ in range(batch_size)]
-        for img_idx, img_predictions in enumerate(inference_output):
+        for img_idx, img_predictions in enumerate(x):
             for fmap_predictions, anchors in zip(img_predictions, self.anchors):
                 clf_pred, rgr_pred = fmap_predictions
                 assert len(clf_pred) == len(rgr_pred) == len(anchors)
                 max_confs, _ = torch.max(clf_pred[:, 1:], dim=1)
                 anchors = torch.as_tensor(anchors)
 
-                if only_top:
-                    _, clf_pred, rgr_pred, anchors = zip(*sorted(zip(max_confs, clf_pred, rgr_pred, anchors),
-                                                                 reverse=True,
-                                                                 key=lambda x: x[0]))
-                    max_predictions = min(len(rgr_pred), self.max_predictions_per_map)
-                    clf_pred, rgr_pred, anchors = list(clf_pred), list(rgr_pred), list(anchors)
-                    clf_pred, rgr_pred, anchors = torch.stack(clf_pred), torch.stack(rgr_pred), torch.stack(anchors)
+                _, clf_pred, rgr_pred, anchors = zip(*sorted(zip(max_confs, clf_pred, rgr_pred, anchors),
+                                                             reverse=True,
+                                                             key=lambda x: x[0]))
+                max_predictions = min(len(rgr_pred), self.max_predictions_per_map)
+                clf_pred, rgr_pred, anchors = list(clf_pred), list(rgr_pred), list(anchors)
+                clf_pred, rgr_pred, anchors = torch.stack(clf_pred), torch.stack(rgr_pred), torch.stack(anchors)
 
-                    boxes = self.box_coder.decode(rgr_pred[:max_predictions], anchors[:max_predictions])
-                    detections[img_idx][0].extend(clf_pred[:max_predictions])
-                    detections[img_idx][1].extend(boxes)
-                else:
-                    boxes = self.box_coder.decode(rgr_pred, anchors)
-                    detections[img_idx][0].extend(clf_pred)
-                    detections[img_idx][1].extend(boxes)
+                boxes = self.box_coder.decode(rgr_pred[:max_predictions], anchors[:max_predictions])
+                detections[img_idx][0].extend(clf_pred[:max_predictions])
+                detections[img_idx][1].extend(boxes)
+
+        return detections
+
+    def feed_forward(self, x):
+        raw_predictions = self.predict(x)
+        batch_size = len(raw_predictions)
+        detections = [([], []) for _ in range(batch_size)]
+        for img_idx, img_predictions in enumerate(raw_predictions):
+            for fmap_predictions, anchors in zip(img_predictions, self.anchors):
+                clf_pred, rgr_pred = fmap_predictions
+                assert len(clf_pred) == len(rgr_pred) == len(anchors)
+                max_confs, _ = torch.max(clf_pred[:, 1:], dim=1)
+                anchors = torch.as_tensor(anchors)
+
+                boxes = self.box_coder.decode(rgr_pred, anchors)
+                detections[img_idx][0].extend(clf_pred)
+                detections[img_idx][1].extend(boxes)
 
         return detections
 
     def forward(self, x):
         with torch.no_grad():
-            detections = self.inference(x)
+            raw_predictions = self.predict(x)
+            detections = self.decode_output(raw_predictions)
         return detections
 
     def training_step(self, batch, batch_idx):
         inputs, targets = batch
-        detections = self.inference(inputs, only_top=False)
+        detections = self.feed_forward(inputs)
 
         batch_loss = 0.
         for img_detections, img_targets in zip(detections, targets):
