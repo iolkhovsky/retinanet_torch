@@ -1,5 +1,5 @@
-import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import pytorch_lightning as pl
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
@@ -12,6 +12,7 @@ from models.bbox_codec import FasterRCNNBoxCoder
 from models.anchor_generator import AnchorGenerator
 from models.retinanet_loss import RetinaNetLoss
 from utils.transforms import *
+from utils.visualization import visuzalize_detection
 
 
 class SSDMobilenet2(nn.Module):
@@ -38,7 +39,7 @@ class SSDMobilenet2(nn.Module):
         return f"SSD_Mobilenetv2_{feature_maps}fm_{self.classes}c_{self.anchors}a"
 
 
-def visualize_prediction_target(inputs, targets, detections, dataformats='CHW', to_tensors=True):
+def visualize_prediction_target(inputs, targets, detections, dataformats='CHW', to_tensors=True, conf_thresh=0.01):
     if type(detections) == torch.Tensor:
         detections = detections.detach().numpy()
     if type(targets) == torch.Tensor:
@@ -47,14 +48,43 @@ def visualize_prediction_target(inputs, targets, detections, dataformats='CHW', 
         inputs = inputs.detach().numpy()
 
     target_imgs, predicted_imgs = [], []
-    for input_img in inputs:
+    for img_idx, input_img in enumerate(inputs):
         input_img = ndarray_cyx2yxc(input_img)
         input_img = denormalize_image(input_img)
         input_img = (input_img * 255).astype(np.uint8)
-        target_imgs.append(input_img)
-        predicted_imgs.append(input_img)
+        predicted_imgs.append(input_img.copy())
 
-    # VISUALIZATION
+        img = input_img.copy()
+        for box, label in zip(targets[img_idx]["boxes"], targets[img_idx]["labels"]):
+            label = label.item()
+            bbox = box.numpy()
+            img = visuzalize_detection(img, label=label, bbox=bbox, prob=1.0)
+        target_imgs.append(img)
+
+        img_logits, img_boxes = detections[img_idx]
+        img_logits, img_boxes = torch.stack(img_logits), torch.stack(img_boxes)
+        img_scores = F.softmax(img_logits, dim=1)
+        max_scores, _ = torch.max(img_scores[:, 1:], dim=1)
+        positive_mask = max_scores > conf_thresh
+        positive_cnt = torch.sum(positive_mask.int())
+        if positive_cnt == 0:
+            continue
+
+        img_scores, img_boxes = img_scores[positive_mask], img_boxes[positive_mask]
+        max_scores = max_scores[positive_mask]
+        img_labels = torch.argmax(img_scores, dim=1)
+
+        predicted_scores, predicted_labels, predicted_boxes = zip(*sorted(zip(max_scores, img_labels, img_boxes),
+                                                                             reverse=True,
+                                                                             key=lambda x: x[0]))
+
+        img = input_img.copy()
+        for score, label, bbox in zip(predicted_scores, predicted_labels, predicted_boxes):
+            prob = score.item()
+            label = label.item()
+            bbox = bbox.numpy()
+            img = visuzalize_detection(img, label=label, bbox=bbox, prob=prob, color=(0, 0, 255))
+        predicted_imgs.append(img)
 
     if dataformats == "CHW":
         target_imgs = [ndarray_yxc2cyx(x) for x in target_imgs]
@@ -187,6 +217,7 @@ class SSDLightning(pl.LightningModule):
         with torch.no_grad():
             self.ssd.eval()
             total, clf, regr, detections = self.compute_loss(batch)
+
             self.tboard.add_scalar("Loss/ValTotal", total, global_step=self.iteration_idx)
             self.tboard.add_scalar("Loss/ValClassification", clf, global_step=self.iteration_idx)
             self.tboard.add_scalar("Loss/ValRegression", regr, global_step=self.iteration_idx)

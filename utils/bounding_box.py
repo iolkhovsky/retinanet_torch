@@ -1,18 +1,30 @@
 import torch
 
 
-def intersection_over_union(box1, box2):
+def intersect_bboxes(box1, box2):
+    empty_box = 0, 0, 0, 0
     x1, y1, w1, h1 = box1
     x2, y2, w2, h2 = box2
     intersection_x0 = max(x1, x2)
     intersection_x1 = min(x1 + w1, x2 + w2)
     if intersection_x1 <= intersection_x0:
-        return 0.
+        return empty_box
     intersection_y0 = max(y1, y2)
     intersection_y1 = min(y1 + h1, y2 + h2)
     if intersection_y1 <= intersection_y0:
+        return empty_box
+    return intersection_x0, intersection_y0, (intersection_x1 - intersection_x0), (intersection_y1 - intersection_y0)
+
+
+def intersection_over_union(box1, box2):
+    x1, y1, w1, h1 = box1
+    x2, y2, w2, h2 = box2
+
+    inter_x, inter_y, inter_w, inter_h = intersect_bboxes(box1, box2)
+    intersection_area = inter_w * inter_h
+    if intersection_area == 0:
         return 0.
-    intersection_area = (intersection_x1 - intersection_x0) * (intersection_y1 - intersection_y0)
+
     box1_area = w1 * h1
     box2_area = w2 * h2
     union_area = box1_area + box2_area - intersection_area
