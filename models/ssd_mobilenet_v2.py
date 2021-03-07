@@ -52,7 +52,6 @@ def visualize_prediction_target(inputs, targets, detections, dataformats='CHW', 
         input_img = ndarray_cyx2yxc(input_img)
         input_img = denormalize_image(input_img)
         input_img = (input_img * 255).astype(np.uint8)
-        predicted_imgs.append(input_img.copy())
 
         img = input_img.copy()
         for box, label in zip(targets[img_idx]["boxes"], targets[img_idx]["labels"]):
@@ -68,6 +67,8 @@ def visualize_prediction_target(inputs, targets, detections, dataformats='CHW', 
         positive_mask = max_scores > conf_thresh
         positive_cnt = torch.sum(positive_mask.int())
         if positive_cnt == 0:
+            img = input_img.copy()
+            predicted_imgs.append(img)
             continue
 
         img_scores, img_boxes = img_scores[positive_mask], img_boxes[positive_mask]
@@ -224,7 +225,7 @@ class SSDLightning(pl.LightningModule):
 
             inputs, targets = batch
             target_imgs, pred_imgs = visualize_prediction_target(inputs, targets, detections, dataformats='CHW',
-                                                                 to_tensors=True)
+                                                                 to_tensors=True, conf_thresh=0.1)
             img_grid_pred = torchvision.utils.make_grid(pred_imgs)
             img_grid_tgt = torchvision.utils.make_grid(target_imgs)
             self.tboard.add_image('Valid/Predicted', img_tensor=img_grid_pred, global_step=self.iteration_idx,
