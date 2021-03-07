@@ -2,7 +2,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 import pytorch_lightning as pl
 from torch.utils.data import DataLoader
-from torch.utils.tensorboard import SummaryWriter
 import torchvision
 
 from dataset.utils import build_voc2012_for_ssd300, collate_voc2012
@@ -100,7 +99,7 @@ def visualize_prediction_target(inputs, targets, detections, dataformats='CHW', 
 
 class SSDLightning(pl.LightningModule):
 
-    def __init__(self, classes_cnt=21):
+    def __init__(self, classes_cnt=21, tboard_writer=None):
         super().__init__()
         aspect_ratios = [0.5, 1., 2.]
         scales = [2 ** x for x in [0, 1. / 3., 2. / 3.]]
@@ -117,7 +116,7 @@ class SSDLightning(pl.LightningModule):
         self.all_anchors = [torch.as_tensor(anchor) for map_anchors in self.anchors for anchor in map_anchors]
         self.all_anchors = torch.stack(self.all_anchors)
         self.max_predictions_per_map = 100
-        self.tboard = SummaryWriter()
+        self.tboard = tboard_writer
         self.iteration_idx = 0
 
     def predict(self, x):
@@ -208,9 +207,10 @@ class SSDLightning(pl.LightningModule):
     def training_step(self, batch, batch_idx):
         self.ssd.train()
         total, clf, regr, _ = self.compute_loss(batch)
-        self.tboard.add_scalar("Loss/TrainTotal", total, global_step=self.iteration_idx)
-        self.tboard.add_scalar("Loss/TrainClassification", clf, global_step=self.iteration_idx)
-        self.tboard.add_scalar("Loss/TrainRegression", regr, global_step=self.iteration_idx)
+        if self.tboard:
+            self.tboard.add_scalar("Loss/TrainTotal", total, global_step=self.iteration_idx)
+            self.tboard.add_scalar("Loss/TrainClassification", clf, global_step=self.iteration_idx)
+            self.tboard.add_scalar("Loss/TrainRegression", regr, global_step=self.iteration_idx)
         self.iteration_idx += 1
         return total
 
@@ -219,19 +219,21 @@ class SSDLightning(pl.LightningModule):
             self.ssd.eval()
             total, clf, regr, detections = self.compute_loss(batch)
 
-            self.tboard.add_scalar("Loss/ValTotal", total, global_step=self.iteration_idx)
-            self.tboard.add_scalar("Loss/ValClassification", clf, global_step=self.iteration_idx)
-            self.tboard.add_scalar("Loss/ValRegression", regr, global_step=self.iteration_idx)
+            if self.tboard:
+                self.tboard.add_scalar("Loss/ValTotal", total, global_step=self.iteration_idx)
+                self.tboard.add_scalar("Loss/ValClassification", clf, global_step=self.iteration_idx)
+                self.tboard.add_scalar("Loss/ValRegression", regr, global_step=self.iteration_idx)
 
             inputs, targets = batch
             target_imgs, pred_imgs = visualize_prediction_target(inputs, targets, detections, dataformats='CHW',
                                                                  to_tensors=True, conf_thresh=0.1)
             img_grid_pred = torchvision.utils.make_grid(pred_imgs)
             img_grid_tgt = torchvision.utils.make_grid(target_imgs)
-            self.tboard.add_image('Valid/Predicted', img_tensor=img_grid_pred, global_step=self.iteration_idx,
-                                  dataformats='CHW')
-            self.tboard.add_image('Valid/Target', img_tensor=img_grid_tgt, global_step=self.iteration_idx,
-                                  dataformats='CHW')
+            if self.tboard:
+                self.tboard.add_image('Valid/Predicted', img_tensor=img_grid_pred, global_step=self.iteration_idx,
+                                      dataformats='CHW')
+                self.tboard.add_image('Valid/Target', img_tensor=img_grid_tgt, global_step=self.iteration_idx,
+                                      dataformats='CHW')
             return total
 
     def test_step(self, batch, batch_idx):
