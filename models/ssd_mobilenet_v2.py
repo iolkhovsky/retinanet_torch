@@ -176,9 +176,8 @@ class SSDLightning(pl.LightningModule):
         return detections
 
     def forward(self, x):
-        with torch.no_grad():
-            raw_predictions = self.predict(x)
-            detections = self.decode_output(raw_predictions)
+        raw_predictions = self.predict(x)
+        detections = self.decode_output(raw_predictions)
         return detections
 
     def compute_loss(self, batch):
@@ -205,7 +204,6 @@ class SSDLightning(pl.LightningModule):
         return batch_loss, batch_clf_loss, batch_regr_loss, detections
 
     def training_step(self, batch, batch_idx):
-        self.ssd.train()
         total, clf, regr, _ = self.compute_loss(batch)
         if self.tboard:
             self.tboard.add_scalar("Loss/TrainTotal", total, global_step=self.iteration_idx)
@@ -215,26 +213,24 @@ class SSDLightning(pl.LightningModule):
         return total
 
     def validation_step(self, batch, batch_idx):
-        with torch.no_grad():
-            self.ssd.eval()
-            total, clf, regr, detections = self.compute_loss(batch)
+        total, clf, regr, detections = self.compute_loss(batch)
 
-            if self.tboard:
-                self.tboard.add_scalar("Loss/ValTotal", total, global_step=self.iteration_idx)
-                self.tboard.add_scalar("Loss/ValClassification", clf, global_step=self.iteration_idx)
-                self.tboard.add_scalar("Loss/ValRegression", regr, global_step=self.iteration_idx)
+        if self.tboard:
+            self.tboard.add_scalar("Loss/ValTotal", total, global_step=self.iteration_idx)
+            self.tboard.add_scalar("Loss/ValClassification", clf, global_step=self.iteration_idx)
+            self.tboard.add_scalar("Loss/ValRegression", regr, global_step=self.iteration_idx)
 
-            inputs, targets = batch
-            target_imgs, pred_imgs = visualize_prediction_target(inputs, targets, detections, dataformats='CHW',
-                                                                 to_tensors=True, conf_thresh=0.1)
-            img_grid_pred = torchvision.utils.make_grid(pred_imgs)
-            img_grid_tgt = torchvision.utils.make_grid(target_imgs)
-            if self.tboard:
-                self.tboard.add_image('Valid/Predicted', img_tensor=img_grid_pred, global_step=self.iteration_idx,
-                                      dataformats='CHW')
-                self.tboard.add_image('Valid/Target', img_tensor=img_grid_tgt, global_step=self.iteration_idx,
-                                      dataformats='CHW')
-            return total
+        inputs, targets = batch
+        target_imgs, pred_imgs = visualize_prediction_target(inputs, targets, detections, dataformats='CHW',
+                                                             to_tensors=True, conf_thresh=0.1)
+        img_grid_pred = torchvision.utils.make_grid(pred_imgs)
+        img_grid_tgt = torchvision.utils.make_grid(target_imgs)
+        if self.tboard:
+            self.tboard.add_image('Valid/Predicted', img_tensor=img_grid_pred, global_step=self.iteration_idx,
+                                  dataformats='CHW')
+            self.tboard.add_image('Valid/Target', img_tensor=img_grid_tgt, global_step=self.iteration_idx,
+                                  dataformats='CHW')
+        return total
 
     def test_step(self, batch, batch_idx):
         pass
