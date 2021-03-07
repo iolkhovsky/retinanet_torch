@@ -6,10 +6,10 @@ from models.focal_loss import FocalLoss
 from models.smooth_l1_loss import SmoothL1Loss
 
 
-class SSDLoss(nn.Module):
+class RetinaNetLoss(nn.Module):
 
     def __init__(self, box_codec, anchors_cnt=6, classes_cnt=21, classification_weight=1., regression_weight=1.):
-        super(SSDLoss, self).__init__()
+        super(RetinaNetLoss, self).__init__()
         self.anchors_cnt = anchors_cnt
         self.classes_cnt = classes_cnt
         self.box_codec = box_codec

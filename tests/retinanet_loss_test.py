@@ -3,12 +3,12 @@ import pytest
 import torch
 
 from models.bbox_codec import FasterRCNNBoxCoder
-from models.ssd_loss import SSDLoss
+from models.retinanet_loss import RetinaNetLoss
 
 
 def test_ssd_loss():
     coder = FasterRCNNBoxCoder()
-    criterion = SSDLoss(box_codec=coder, anchors_cnt=2, classes_cnt=3)
+    criterion = RetinaNetLoss(box_codec=coder, anchors_cnt=2, classes_cnt=3)
 
     anchors = torch.from_numpy(
         np.asarray([(10, 10, 100, 20), (10, 50, 20, 100), (100, 100, 100, 20), (100, 10, 30, 100)]))

@@ -8,7 +8,7 @@ from models.mobilenet_v2 import SSDBackboneMobilenetv2
 from models.ssd_predictor import SSDPredictor
 from models.bbox_codec import FasterRCNNBoxCoder
 from models.anchor_generator import AnchorGenerator
-from models.ssd_loss import SSDLoss
+from models.retinanet_loss import RetinaNetLoss
 
 
 class SSDMobilenet2(nn.Module):
@@ -45,7 +45,7 @@ class SSDLightning(pl.LightningModule):
         self.classes_cnt = classes_cnt
         self.ssd = SSDMobilenet2(anchors_cnt=anchors_cnt, classes_cnt=classes_cnt)
         self.box_coder = FasterRCNNBoxCoder()
-        self.criterion = SSDLoss(box_codec=self.box_coder, classes_cnt=classes_cnt, anchors_cnt=anchors_cnt)
+        self.criterion = RetinaNetLoss(box_codec=self.box_coder, classes_cnt=classes_cnt, anchors_cnt=anchors_cnt)
         self.anchor_gen = AnchorGenerator(aspect_ratios=aspect_ratios, scales=scales)
         self.anchors = []
         img_size = 300
