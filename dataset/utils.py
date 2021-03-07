@@ -1,11 +1,13 @@
 import torchvision
-from bounding_box import bounding_box as bb
 
 from utils.transforms import *
+from utils.visualization import *
 
 
-COLORS = ("navy", "blue", "aqua", "teal", "olive", "green", "lime", "yellow", "orange", "red", "maroon", "fuchsia",
-          "purple", "black", "gray", "silver")
+COLORS = ((255, 0, 0), (255, 0, 0), (255, 0, 0), (255, 0, 0),
+          (255, 0, 0), (0, 255, 0), (0, 255, 0), (0, 255, 0),
+          (0, 255, 0), (0, 0, 255), (0, 0, 255), (0, 0, 255),
+          (0, 0, 255), (0, 0, 255), (0, 0, 255), (0, 0, 255))
 DEFAULT_COLOR = COLORS[9]
 VOC_CLASSES = \
     {
@@ -33,17 +35,9 @@ VOC_CLASSES = \
     }
 
 
-def visualize_object(in_img, input_bbox, label="", color="red"):
-    img = in_img.copy()
-    x, y, w, h = input_bbox
-    x1, x2, y1, y2 = x, x + w - 1, y, y + h - 1
-    bb.add(img, x1, y1, x2, y2, label, color)
-    return img
-
-
 def visualize_detection(img, class_id, class_label, conf, bbox):
     conf_str = "{:.2f}".format(conf)
-    return visualize_object(img, bbox, label=f"{class_label} ({class_id}): {conf_str}")
+    return
 
 
 def visualize_voc_annotation(img, voc_xml_annotation):
@@ -54,7 +48,8 @@ def visualize_voc_annotation(img, voc_xml_annotation):
         y = int(obj["bndbox"]["ymin"])
         w = int(obj["bndbox"]["xmax"]) - x + 1
         h = int(obj["bndbox"]["ymax"]) - y + 1
-        out = visualize_object(img, (x, y, w, h), label, color=VOC_CLASSES[label]["color"])
+        conf_str = "{:.2f}".format(1.0)
+        out = visuzalize_detection(img, label=label, bbox=(x, y, w, h), prob=conf_str, color=VOC_CLASSES[label]["color"])
     return out
 
 
