@@ -19,6 +19,16 @@ class SSDLoss(nn.Module):
         self.classification_criterion = FocalLoss()
 
     def forward(self, classification_preds, boxes_preds, anchors, target_boxes, target_labels, iou_thresh=0.5):
+        assert isinstance(classification_preds, (list, torch.Tensor))
+        assert isinstance(boxes_preds, (list, torch.Tensor))
+        assert isinstance(anchors, (list, torch.Tensor))
+        if type(classification_preds) == list:
+            classification_preds = torch.stack(classification_preds)
+        if type(boxes_preds) == list:
+            boxes_preds = torch.stack(boxes_preds)
+        assert len(classification_preds) == len(boxes_preds) == len(anchors)
+        assert len(target_boxes) == len(target_labels)
+        assert iou_thresh > 0.1
         classification_preds = classification_preds.view(-1, self.classes_cnt)
         boxes_preds = boxes_preds.view(-1, 4)
         anchors = anchors.view(-1, 4)
@@ -28,20 +38,23 @@ class SSDLoss(nn.Module):
         iou_matrix = compute_iou(target_boxes, anchors)
         max_iou_for_anchors, target_ids_for_anchors = torch.max(iou_matrix, dim=0)
         positive_anchors_mask = max_iou_for_anchors >= iou_thresh
-        positive_anchors_cnt = torch.sum(torch.where(positive_anchors_mask, 1, 0))
+        positive_anchors_cnt = torch.clamp(torch.sum(positive_anchors_mask.int()), min=1)
 
         classification_targets = torch.zeros(size=classification_preds.size())
-        classification_targets[positive_anchors_mask] = \
-            nn.functional.one_hot(target_labels[target_ids_for_anchors][positive_anchors_mask]).float()
-        classification_loss = self.classification_criterion(classification_preds, classification_targets)
+        classification_targets[:, 0] = 1.
+        target_confidences = nn.functional.one_hot(target_labels[target_ids_for_anchors][positive_anchors_mask],
+                                                   num_classes=self.classes_cnt).float()
+        classification_targets[positive_anchors_mask] = target_confidences
+        classification_loss = self.classification_criterion(pred_logits=classification_preds,
+                                                            target=classification_targets)
         classification_loss = torch.sum(classification_loss) / positive_anchors_cnt
 
-        predicted_positive_boxes = boxes_preds[positive_anchors_mask]
-        max_iou_for_targets, anchor_ids_for_targets = torch.max(iou_matrix, dim=1)
-        target_match_mask = max_iou_for_targets >= iou_thresh
-        matched_target_boxes = target_boxes[target_match_mask]
-        anchors_for_matched_targets = anchors[anchor_ids_for_targets][target_match_mask]
-        encoded_target_boxes = self.box_codec.encode(matched_target_boxes, anchors_for_matched_targets)
+        encoded_boxes_preds = self.box_codec.encode(boxes_preds, anchors)
+        predicted_positive_boxes = encoded_boxes_preds[positive_anchors_mask]
+        target_boxes_ids = target_ids_for_anchors[positive_anchors_mask]
+        target_boxes_for_positives = target_boxes[target_boxes_ids]
+        anchors_for_positives = anchors[positive_anchors_mask]
+        encoded_target_boxes = self.box_codec.encode(target_boxes_for_positives, anchors_for_positives)
         regression_loss = self.regression_criterion(predicted_positive_boxes, encoded_target_boxes)
 
         weighed_class_loss = classification_loss * self.classifcation_w

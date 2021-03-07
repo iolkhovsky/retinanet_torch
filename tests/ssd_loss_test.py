@@ -22,5 +22,8 @@ def test_ssd_loss():
     pred_labels = torch.from_numpy(
         np.asarray([(0.2, 0.55, 0.01), (0.01, 0.2, 0.15), (0.015, 0.4, 0.2), (0.1, 0.2, 0.6)]))
 
-    total, classification, regression = criterion(classification_preds=pred_labels, boxes_preds=pred_boxes_encoded, anchors=anchors,
-                     target_boxes=ground_truth_boxes, target_labels=ground_truth_labels)
+    total, classification, regression = criterion(classification_preds=pred_labels,
+                                                  boxes_preds=pred_boxes_encoded,
+                                                  anchors=anchors,
+                                                  target_boxes=ground_truth_boxes,
+                                                  target_labels=ground_truth_labels)
