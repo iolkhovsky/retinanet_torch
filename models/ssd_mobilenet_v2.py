@@ -119,8 +119,13 @@ class SSDLightning(pl.LightningModule):
 
     def training_step(self, batch, batch_idx):
         inputs, targets = batch
+
+        if torch.any(torch.isnan(inputs)) or torch.any(torch.isinf(inputs)):
+            print('invalid input detected at iteration ', batch_idx)
+
         detections = self.feed_forward(inputs)
 
+        batch_size = max(len(batch), 1)
         batch_loss = 0.
         for img_detections, img_targets in zip(detections, targets):
             pred_confidences, pred_boxes = img_detections
@@ -132,7 +137,7 @@ class SSDLightning(pl.LightningModule):
                                                                target_boxes=target_boxes,
                                                                target_labels=target_labels)
             batch_loss += total
-        batch_loss /= len(batch)
+        batch_loss /= batch_size
         return batch_loss
 
     def validation_step(self, batch, batch_idx):

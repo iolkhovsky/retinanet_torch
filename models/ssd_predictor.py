@@ -1,3 +1,4 @@
+import numpy as np
 import torch.nn as nn
 
 
@@ -15,11 +16,13 @@ class SSDRegressionHead(nn.Module):
 
 class SSDClassificationHead(nn.Module):
 
-    def __init__(self, in_channels, anchors_cnt, classes_cnt, kernel=3, pad=1):
+    def __init__(self, in_channels, anchors_cnt, classes_cnt, kernel=3, pad=1, pi=0.01):
         super(SSDClassificationHead, self).__init__()
         classification_channels = classes_cnt * anchors_cnt
         self.conv = nn.Conv2d(in_channels, classification_channels, kernel_size=(kernel, kernel), stride=(1, 1),
-                              padding=(pad, pad))
+                              padding=(pad, pad), bias=True)
+        initial_bias = -1. * np.log((1. - pi) / pi)
+        self.conv.bias.data.fill_(initial_bias)
 
     def forward(self, x):
         return self.conv(x)
