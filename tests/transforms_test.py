@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from utils.transforms import ndarray_cyx2yxc, ndarray_yxc2cyx
+from utils.transforms import *
 
 
 def test_ndarray_cyx2yxc():
@@ -24,6 +24,14 @@ def test_ndarray_yxc2cyx():
     assert transformed_array[c, y, x] == probe
 
 
+def test_normalization():
+    img = np.random.randint(0, 255, size=(480, 640, 3))
+    norm_img = normalize_image(img)
+    denorm_img = denormalize_image(norm_img)
+    assert np.sum(norm_img - denorm_img) == 0
+
+
 if __name__ == "__main__":
     test_ndarray_cyx2yxc()
     test_ndarray_yxc2cyx()
+    test_normalization()
