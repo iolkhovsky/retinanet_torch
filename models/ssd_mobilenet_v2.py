@@ -171,7 +171,7 @@ class SSDLightning(pl.LightningModule):
             for fmap_predictions, anchors in zip(img_predictions, self.anchors):
                 clf_pred, rgr_pred = fmap_predictions
                 assert len(clf_pred) == len(rgr_pred) == len(anchors)
-                anchors = torch.as_tensor(anchors)
+                anchors = torch.as_tensor(anchors).to(self.device)
 
                 boxes = self.box_coder.decode(rgr_pred, anchors)
                 detections[img_idx][0].extend(clf_pred)
