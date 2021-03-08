@@ -88,10 +88,19 @@ def visualize_prediction_target(inputs, targets, detections, dataformats='CHW', 
 
         img = input_img.copy()
         for score, label, bbox in zip(predicted_scores, predicted_labels, predicted_boxes):
-            prob = score.item()
-            label = label.item()
-            bbox = bbox.numpy()
-            img = visuzalize_detection(img, label=label, bbox=bbox, prob=prob, color=(0, 0, 255))
+            if isinstance(score, torch.Tensor):
+                if score.device != target_device:
+                    score = score.to(target_device)
+                score = score.detach().numpy()
+            if isinstance(label, torch.Tensor):
+                if label.device != target_device:
+                    label = label.to(target_device)
+                label = label.detach().numpy()
+            if isinstance(bbox, torch.Tensor):
+                if bbox.device != target_device:
+                    bbox = bbox.to(target_device)
+                bbox = bbox.detach().numpy()
+            img = visuzalize_detection(img, label=label, bbox=bbox, prob=score, color=(0, 0, 255))
         predicted_imgs.append(img)
 
     if dataformats == "CHW":
