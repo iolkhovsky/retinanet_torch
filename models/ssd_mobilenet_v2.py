@@ -116,7 +116,7 @@ class SSDLightning(pl.LightningModule):
         for map_size in [38, 19, 10, 5, 3, 1]:
             self.anchors.append(self.anchor_gen.generate(img_size, map_size))
         self.all_anchors = [torch.as_tensor(anchor) for map_anchors in self.anchors for anchor in map_anchors]
-        self.all_anchors = torch.stack(self.all_anchors)
+        self.all_anchors = torch.stack(self.all_anchors).to(self.device)
         self.max_predictions_per_map = 100
         self.tboard = tboard_writer
         self.iteration_idx = 0
