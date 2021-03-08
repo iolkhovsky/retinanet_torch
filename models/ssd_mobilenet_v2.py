@@ -99,7 +99,7 @@ def visualize_prediction_target(inputs, targets, detections, dataformats='CHW', 
 
 class SSDLightning(pl.LightningModule):
 
-    def __init__(self, classes_cnt=21, tboard_writer=None):
+    def __init__(self, classes_cnt=21, tboard_writer=None, train_batch=2, val_batch=16):
         super().__init__()
         aspect_ratios = [0.5, 1., 2.]
         scales = [2 ** x for x in [0, 1. / 3., 2. / 3.]]
@@ -118,6 +118,8 @@ class SSDLightning(pl.LightningModule):
         self.max_predictions_per_map = 100
         self.tboard = tboard_writer
         self.iteration_idx = 0
+        self.train_batch_size = train_batch
+        self.val_batch_size = val_batch
 
     def predict(self, x):
         assert len(x.size()) == 4
@@ -204,6 +206,8 @@ class SSDLightning(pl.LightningModule):
         return batch_loss, batch_clf_loss, batch_regr_loss, detections
 
     def training_step(self, batch, batch_idx):
+        batch = self.batch_to_device(batch, self.device)
+
         total, clf, regr, _ = self.compute_loss(batch)
         if self.tboard:
             self.tboard.add_scalar("Loss/TrainTotal", total, global_step=self.iteration_idx)
@@ -213,6 +217,8 @@ class SSDLightning(pl.LightningModule):
         return total
 
     def validation_step(self, batch, batch_idx):
+        batch = self.batch_to_device(batch, self.device)
+
         total, clf, regr, detections = self.compute_loss(batch)
 
         if self.tboard:
@@ -240,7 +246,15 @@ class SSDLightning(pl.LightningModule):
         return optimizer
 
     def train_dataloader(self):
-        return DataLoader(build_voc2012_for_ssd300(subset="train"), batch_size=2, collate_fn=collate_voc2012)
+        dataset = build_voc2012_for_ssd300(subset="train")
+        return DataLoader(dataset, batch_size=self.train_batch_size, collate_fn=collate_voc2012)
 
     def val_dataloader(self):
-        return DataLoader(build_voc2012_for_ssd300(subset="val"), batch_size=16, collate_fn=collate_voc2012)
+        dataset = build_voc2012_for_ssd300(subset="val")
+        return DataLoader(dataset, batch_size=self.val_batch_size, collate_fn=collate_voc2012)
+
+    def batch_to_device(self, batch, device):
+        inputs, targets = batch
+        inputs = inputs.to(self.device)
+        targets = [{"boxes": x["boxes"].to(device), "labels": x["labels"].to(device)} for x in targets]
+        return inputs, targets
