@@ -44,7 +44,7 @@ class RetinaNetLoss(nn.Module):
         positive_anchors_cnt = torch.sum(positive_anchors_mask.int())
         normalization_cnt = torch.clamp(positive_anchors_cnt, min=1)
 
-        classification_targets = torch.zeros(size=classification_preds.size())
+        classification_targets = torch.zeros(size=classification_preds.size()).to(classification_preds.device)
         classification_targets[:, 0] = 1.
         target_confidences = nn.functional.one_hot(target_labels[target_ids_for_anchors][positive_anchors_mask],
                                                    num_classes=self.classes_cnt).float()

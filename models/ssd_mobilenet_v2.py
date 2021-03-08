@@ -42,30 +42,29 @@ class SSDMobilenet2(nn.Module):
 
 def visualize_prediction_target(inputs, targets, detections, dataformats='CHW', to_tensors=True, conf_thresh=0.01):
     target_device = "cpu"
-    if inputs.device != target_device:
-        inputs = inputs.to(target_device)
-    if targets.device != target_device:
-        targets = targets.to(target_device)
-    if detections.device != target_device:
-        detections = detections.to(target_device)
-    if type(detections) == torch.Tensor:
-        detections = detections.detach().numpy()
-    if type(targets) == torch.Tensor:
-        targets = targets.detach().numpy()
-    if type(inputs) == torch.Tensor:
-        inputs = inputs.detach().numpy()
 
     target_imgs, predicted_imgs = [], []
     for img_idx, input_img in enumerate(inputs):
+        if isinstance(input_img, torch.Tensor):
+            if input_img.device != target_device:
+                input_img = input_img.to(target_device)
+            input_img = input_img.detach().numpy()
+
         input_img = ndarray_cyx2yxc(input_img)
         input_img = denormalize_image(input_img)
         input_img = (input_img * 255).astype(np.uint8)
 
         img = input_img.copy()
         for box, label in zip(targets[img_idx]["boxes"], targets[img_idx]["labels"]):
-            label = label.item()
-            bbox = box.numpy()
-            img = visuzalize_detection(img, label=label, bbox=bbox, prob=1.0)
+            if isinstance(box, torch.Tensor):
+                if box.device != target_device:
+                    box = box.to(target_device)
+                box = box.detach().numpy()
+            if isinstance(label, torch.Tensor):
+                if label.device != target_device:
+                    label = label.to(target_device)
+                label = label.detach().numpy()
+            img = visuzalize_detection(img, label=label, bbox=box, prob=1.0)
         target_imgs.append(img)
 
         img_logits, img_boxes = detections[img_idx]
