@@ -47,10 +47,10 @@ class FasterRCNNBoxCoder(nn.Module):
         centered_anchors = xywh_to_xcyc(anchors)
         anchors_x, anchors_y, anchors_w, anchors_h = torch.unbind(torch.transpose(centered_anchors, 0, 1))
         tx, ty, tw, th = torch.unbind(torch.transpose(rel_codes, 0, 1))
-        tx_scaled = tx.clone()
-        ty_scaled = ty.clone()
-        tw_scaled = tw.clone()
-        th_scaled = th.clone()
+        tx_scaled = tx.clone().to(rel_codes.device)
+        ty_scaled = ty.clone().to(rel_codes.device)
+        tw_scaled = tw.clone().to(rel_codes.device)
+        th_scaled = th.clone().to(rel_codes.device)
         if self._scale_factors:
             tx_scaled /= self._scale_factors[0]
             ty_scaled /= self._scale_factors[1]
