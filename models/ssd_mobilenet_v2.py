@@ -40,7 +40,7 @@ class SSDMobilenet2(nn.Module):
         return f"SSD_Mobilenetv2_{feature_maps}fm_{self.classes}c_{self.anchors}a"
 
 
-def visualize_prediction_target(inputs, targets, detections, dataformats='CHW', to_tensors=True, conf_thresh=0.01):
+def visualize_prediction_target(inputs, targets, detections, dataformats='CHW', to_tensors=True, conf_thresh=1e-2):
     target_device = "cpu"
 
     target_imgs, predicted_imgs = [], []
@@ -70,21 +70,21 @@ def visualize_prediction_target(inputs, targets, detections, dataformats='CHW', 
         img_logits, img_boxes = detections[img_idx]
         img_logits, img_boxes = torch.stack(img_logits), torch.stack(img_boxes)
         img_scores = F.softmax(img_logits, dim=1)
-        max_scores, _ = torch.max(img_scores[:, 1:], dim=1)
-        positive_mask = max_scores > conf_thresh
-        positive_cnt = torch.sum(positive_mask.int())
+        max_scores, img_labels = torch.max(img_scores, dim=1)
+        positive_detections_mask = torch.logical_and(max_scores >= conf_thresh, img_labels > 0)
+        positive_cnt = torch.sum(positive_detections_mask.int())
         if positive_cnt == 0:
             img = input_img.copy()
             predicted_imgs.append(img)
             continue
 
-        img_scores, img_boxes = img_scores[positive_mask], img_boxes[positive_mask]
-        max_scores = max_scores[positive_mask]
-        img_labels = torch.argmax(img_scores, dim=1)
+        max_scores = max_scores[positive_detections_mask]
+        img_labels = img_labels[positive_detections_mask]
+        img_boxes = img_boxes[positive_detections_mask]
 
         predicted_scores, predicted_labels, predicted_boxes = zip(*sorted(zip(max_scores, img_labels, img_boxes),
-                                                                             reverse=True,
-                                                                             key=lambda x: x[0]))
+                                                                          reverse=True,
+                                                                          key=lambda x: x[0]))
 
         img = input_img.copy()
         for score, label, bbox in zip(predicted_scores, predicted_labels, predicted_boxes):
