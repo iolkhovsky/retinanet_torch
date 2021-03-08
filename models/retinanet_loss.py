@@ -26,6 +26,8 @@ class RetinaNetLoss(nn.Module):
             classification_preds = torch.stack(classification_preds)
         if type(boxes_preds) == list:
             boxes_preds = torch.stack(boxes_preds)
+        if type(anchors) == list:
+            anchors = torch.stack(anchors).to(classification_preds.device)
         assert len(classification_preds) == len(boxes_preds) == len(anchors)
         assert len(target_boxes) == len(target_labels)
         assert iou_thresh > 0.1
