@@ -41,6 +41,13 @@ class SSDMobilenet2(nn.Module):
 
 
 def visualize_prediction_target(inputs, targets, detections, dataformats='CHW', to_tensors=True, conf_thresh=0.01):
+    target_device = "cpu"
+    if inputs.device != target_device:
+        inputs = inputs.to(target_device)
+    if targets.device != target_device:
+        targets = targets.to(target_device)
+    if detections.device != target_device:
+        detections = detections.to(target_device)
     if type(detections) == torch.Tensor:
         detections = detections.detach().numpy()
     if type(targets) == torch.Tensor:
