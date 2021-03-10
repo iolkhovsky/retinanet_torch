@@ -6,7 +6,7 @@ import torchvision
 
 from dataset.utils import build_voc2012_for_ssd300, collate_voc2012
 from models.mobilenet_v2 import SSDBackboneMobilenetv2
-from models.ssd_predictor import SSDPredictor
+from models.ssd_predictor import RetinaNetPredictor
 from models.bbox_codec import FasterRCNNBoxCoder
 from models.anchor_generator import AnchorGenerator
 from models.retinanet_loss import RetinaNetLoss
@@ -22,12 +22,12 @@ class SSDMobilenet2(nn.Module):
         self.backbone = SSDBackboneMobilenetv2(alpha=1., pretrained=True, requires_grad=True)
         self.predictor_heads = nn.ModuleList(
             [
-                SSDPredictor(in_channels=32, classes_cnt=classes_cnt, anchors_cnt=anchors_cnt),
-                SSDPredictor(in_channels=96, classes_cnt=classes_cnt, anchors_cnt=anchors_cnt),
-                SSDPredictor(in_channels=320, classes_cnt=classes_cnt, anchors_cnt=anchors_cnt),
-                SSDPredictor(in_channels=480, classes_cnt=classes_cnt, anchors_cnt=anchors_cnt),
-                SSDPredictor(in_channels=640, classes_cnt=classes_cnt, anchors_cnt=anchors_cnt),
-                SSDPredictor(in_channels=640, classes_cnt=classes_cnt, anchors_cnt=anchors_cnt, kernel=1, pad=0)
+                RetinaNetPredictor(in_channels=32, classes_cnt=classes_cnt, anchors_cnt=anchors_cnt),
+                RetinaNetPredictor(in_channels=96, classes_cnt=classes_cnt, anchors_cnt=anchors_cnt),
+                RetinaNetPredictor(in_channels=320, classes_cnt=classes_cnt, anchors_cnt=anchors_cnt),
+                RetinaNetPredictor(in_channels=480, classes_cnt=classes_cnt, anchors_cnt=anchors_cnt),
+                RetinaNetPredictor(in_channels=640, classes_cnt=classes_cnt, anchors_cnt=anchors_cnt),
+                RetinaNetPredictor(in_channels=640, classes_cnt=classes_cnt, anchors_cnt=anchors_cnt, kernel=1, pad=0)
             ]
         )
 
@@ -40,7 +40,7 @@ class SSDMobilenet2(nn.Module):
         return f"SSD_Mobilenetv2_{feature_maps}fm_{self.classes}c_{self.anchors}a"
 
 
-def visualize_prediction_target(inputs, targets, detections, dataformats='CHW', to_tensors=True, conf_thresh=1e-2):
+def visualize_prediction_target(inputs, targets, detections, dataformats='CHW', to_tensors=True, conf_thresh=5e-2):
     target_device = "cpu"
 
     target_imgs, predicted_imgs = [], []
