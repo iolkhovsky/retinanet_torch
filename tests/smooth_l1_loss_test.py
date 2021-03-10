@@ -14,7 +14,7 @@ def test_smooth_l1_loss():
             target_loss.append(0.5 * abs(p-t) ** 2)
         else:
             target_loss.append(abs(p - t) - 0.5)
-    target_loss = np.asarray(target_loss).mean()
+    target_loss = np.asarray(target_loss).sum()
     pred_tensor = torch.from_numpy(preds).view(2, 2, 4)
     target_tensor = torch.from_numpy(target).view(2, 2, 4)
     criterion = SmoothL1Loss()

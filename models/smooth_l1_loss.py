@@ -5,7 +5,7 @@ class SmoothL1Loss(nn.Module):
 
     def __init__(self):
         super(SmoothL1Loss, self).__init__()
-        self.criterion = nn.SmoothL1Loss(beta=1.)
+        self.criterion = nn.SmoothL1Loss(beta=1., reduction="sum")
 
     def forward(self, predicted_boxes, target_boxes):
         """
