@@ -1,7 +1,7 @@
 import pytorch_lightning as pl
 from torch.utils.tensorboard import SummaryWriter
 
-from models.ssd_mobilenet_v2 import SSDLightning
+from models.retinanet import SSDLightning
 
 writer = SummaryWriter()
 model = SSDLightning(classes_cnt=21, tboard_writer=writer)

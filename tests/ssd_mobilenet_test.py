@@ -1,7 +1,7 @@
 import pytest
 import torch
 
-from models.ssd_mobilenet_v2 import SSDMobilenet2, SSDLightning
+from models.retinanet import RetinanetMobilenet2, SSDLightning
 
 
 def test_ssd_mobilenet():
@@ -11,7 +11,7 @@ def test_ssd_mobilenet():
     feature_map_sizes = [38, 19, 10, 5, 3, 1]
     anchors_cnt = len(aspect_ratios) * len(scales)
     classes_cnt = 21
-    ssd = SSDMobilenet2(anchors_cnt, classes_cnt)
+    ssd = RetinanetMobilenet2(anchors_cnt, classes_cnt)
     x = torch.rand(batch_size, 3, 300, 300)
     predictions = ssd(x)
     assert len(predictions) == len(feature_map_sizes)

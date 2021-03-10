@@ -14,10 +14,10 @@ from utils.transforms import *
 from utils.visualization import visuzalize_detection
 
 
-class SSDMobilenet2(nn.Module):
+class RetinanetMobilenet2(nn.Module):
 
     def __init__(self, anchors_cnt=6, classes_cnt=21):
-        super(SSDMobilenet2, self).__init__()
+        super(RetinanetMobilenet2, self).__init__()
         self.anchors, self.classes = anchors_cnt, classes_cnt
         self.backbone = SSDBackboneMobilenetv2(alpha=1., pretrained=True, requires_grad=True)
         self.predictor_heads = nn.ModuleList(
@@ -37,7 +37,7 @@ class SSDMobilenet2(nn.Module):
 
     def __str__(self):
         feature_maps = len(self.classification_heads)
-        return f"SSD_Mobilenetv2_{feature_maps}fm_{self.classes}c_{self.anchors}a"
+        return f"Retinanet_Mobilenetv2_{feature_maps}fm_{self.classes}c_{self.anchors}a"
 
 
 def visualize_prediction_target(inputs, targets, detections, dataformats='CHW', to_tensors=True, conf_thresh=5e-2):
@@ -122,7 +122,7 @@ class SSDLightning(pl.LightningModule):
         scales = [2 ** x for x in [0, 1. / 3., 2. / 3.]]
         anchors_cnt = len(aspect_ratios) * len(scales)
         self.classes_cnt = classes_cnt
-        self.ssd = SSDMobilenet2(anchors_cnt=anchors_cnt, classes_cnt=classes_cnt)
+        self.model = RetinanetMobilenet2(anchors_cnt=anchors_cnt, classes_cnt=classes_cnt)
         self.box_coder = FasterRCNNBoxCoder()
         self.criterion = RetinaNetLoss(box_codec=self.box_coder, classes_cnt=classes_cnt, anchors_cnt=anchors_cnt)
         self.anchor_gen = AnchorGenerator(aspect_ratios=aspect_ratios, scales=scales)
@@ -140,7 +140,7 @@ class SSDLightning(pl.LightningModule):
 
     def predict(self, x):
         assert len(x.size()) == 4
-        predictions = self.ssd(x)
+        predictions = self.model(x)
         assert predictions is not None
         batch_size = x.shape[0]
         inference_output = [[] for _ in range(batch_size)]
@@ -275,3 +275,6 @@ class SSDLightning(pl.LightningModule):
         inputs = inputs.to(self.device)
         targets = [{"boxes": x["boxes"].to(device), "labels": x["labels"].to(device)} for x in targets]
         return inputs, targets
+
+    def __str__(self):
+        return f"Lightning_{self.model}"

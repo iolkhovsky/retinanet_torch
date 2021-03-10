@@ -2,7 +2,7 @@ import torch
 from torch.utils.data import DataLoader
 
 from dataset.utils import build_voc2012_for_ssd300, collate_voc2012
-from models.ssd_mobilenet_v2 import SSDMobilenet2
+from models.retinanet import RetinanetMobilenet2
 from models.bbox_codec import FasterRCNNBoxCoder
 from models.anchor_generator import AnchorGenerator
 from models.retinanet_loss import RetinaNetLoss
@@ -14,7 +14,7 @@ aspect_ratios = [0.5, 1., 2.]
 scales = [2 ** x for x in [0, 1. / 3., 2. / 3.]]
 anchors_cnt = len(aspect_ratios) * len(scales)
 classes_cnt = 21
-ssd = SSDMobilenet2(anchors_cnt=anchors_cnt, classes_cnt=classes_cnt)
+ssd = RetinanetMobilenet2(anchors_cnt=anchors_cnt, classes_cnt=classes_cnt)
 optimizer = torch.optim.Adam(ssd.parameters(), lr=1e-3)
 box_coder = FasterRCNNBoxCoder()
 criterion = RetinaNetLoss(box_codec=box_coder, classes_cnt=classes_cnt, anchors_cnt=anchors_cnt)
