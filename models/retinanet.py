@@ -114,7 +114,7 @@ def visualize_prediction_target(inputs, targets, detections, dataformats='CHW', 
     return target_imgs, predicted_imgs
 
 
-class SSDLightning(pl.LightningModule):
+class RetinanetLightning(pl.LightningModule):
 
     def __init__(self, classes_cnt=21, tboard_writer=None, train_batch=2, val_batch=16):
         super().__init__()

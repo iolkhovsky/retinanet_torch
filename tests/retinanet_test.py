@@ -1,10 +1,10 @@
 import pytest
 import torch
 
-from models.retinanet import RetinanetMobilenet2, SSDLightning
+from models.retinanet import RetinanetMobilenet2, RetinanetLightning
 
 
-def test_ssd_mobilenet():
+def test_retinanet():
     batch_size = 4
     aspect_ratios = [0.5, 1., 2.]
     scales = [2 ** x for x in [0, 1. / 3., 2. / 3.]]
@@ -26,9 +26,9 @@ def test_ssd_mobilenet():
         assert target_rgr_size == rgr_output_size
 
 
-def test_ssd_mobilene_tl():
+def test_retinanet_tl():
     classes_cnt = 21
-    ssd = SSDLightning(classes_cnt=classes_cnt)
+    ssd = RetinanetLightning(classes_cnt=classes_cnt)
     batch_size = 4
     x = torch.rand(batch_size, 3, 300, 300)
     res = ssd.forward(x)
@@ -43,5 +43,5 @@ def test_ssd_mobilene_tl():
 
 
 if __name__ == "__main__":
-    test_ssd_mobilenet()
-    test_ssd_mobilene_tl()
+    test_retinanet()
+    test_retinanet_tl()

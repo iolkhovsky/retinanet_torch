@@ -1,10 +1,10 @@
 import pytorch_lightning as pl
 from torch.utils.tensorboard import SummaryWriter
 
-from models.retinanet import SSDLightning
+from models.retinanet import RetinanetLightning
 
 writer = SummaryWriter()
-model = SSDLightning(classes_cnt=21, tboard_writer=writer)
+model = RetinanetLightning(classes_cnt=21, tboard_writer=writer)
 
 trainer = pl.Trainer(limit_val_batches=1,
                      #gpus=[0],
