@@ -36,7 +36,7 @@ class RetinanetMobilenet2(nn.Module):
         return [predictor(feature_map) for predictor, feature_map in zip(self.predictor_heads, feature_maps)]
 
     def __str__(self):
-        feature_maps = len(self.classification_heads)
+        feature_maps = len(self.predictor_heads)
         return f"Retinanet_Mobilenetv2_{feature_maps}fm_{self.classes}c_{self.anchors}a"
 
 
