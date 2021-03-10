@@ -116,7 +116,7 @@ def visualize_prediction_target(inputs, targets, detections, dataformats='CHW', 
 
 class RetinanetLightning(pl.LightningModule):
 
-    def __init__(self, classes_cnt=21, tboard_writer=None, train_batch=2, val_batch=16):
+    def __init__(self, classes_cnt=21, tboard_writer=None, train_batch=2, val_batch=16, dataset_storage=None):
         super().__init__()
         aspect_ratios = [0.5, 1., 2.]
         scales = [2 ** x for x in [0, 1. / 3., 2. / 3.]]
@@ -137,6 +137,7 @@ class RetinanetLightning(pl.LightningModule):
         self.iteration_idx = 0
         self.train_batch_size = train_batch
         self.val_batch_size = val_batch
+        self.data_storage = dataset_storage
 
     def predict(self, x):
         assert len(x.size()) == 4
@@ -263,11 +264,11 @@ class RetinanetLightning(pl.LightningModule):
         return optimizer
 
     def train_dataloader(self):
-        dataset = build_voc2012_for_ssd300(subset="train")
+        dataset = build_voc2012_for_ssd300(root=self.data_storage, subset="train")
         return DataLoader(dataset, batch_size=self.train_batch_size, collate_fn=collate_voc2012)
 
     def val_dataloader(self):
-        dataset = build_voc2012_for_ssd300(subset="val")
+        dataset = build_voc2012_for_ssd300(root=self.data_storage, subset="val")
         return DataLoader(dataset, batch_size=self.val_batch_size, collate_fn=collate_voc2012)
 
     def batch_to_device(self, batch, device):

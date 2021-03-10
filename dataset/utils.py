@@ -80,7 +80,9 @@ def transform_voc_item_ssd300(input, target):
     return input_tensor, {"boxes": target_boxes, "labels": target_labels}
 
 
-def build_voc2012_for_ssd300(root="../data", subset="train"):
+def build_voc2012_for_ssd300(root=None, subset="train"):
+    if root is None:
+        root = "../data"
     return torchvision.datasets.VOCDetection(root=root,
                                              year="2012",
                                              image_set=subset,
