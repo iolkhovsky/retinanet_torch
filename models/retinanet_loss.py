@@ -62,6 +62,7 @@ class RetinaNetLoss(nn.Module):
             anchors_for_positives = anchors[positive_anchors_mask]
             encoded_target_boxes = self.box_codec.encode(target_boxes_for_positives, anchors_for_positives)
             regression_loss = self.regression_criterion(predicted_positive_boxes, encoded_target_boxes)
+            regression_loss = regression_loss / normalization_cnt
 
         weighed_class_loss = classification_loss * self.classifcation_w
         weighed_regr_loss = regression_loss * self.regression_w
