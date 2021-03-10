@@ -219,7 +219,7 @@ class SSDLightning(pl.LightningModule):
             batch_regr_loss += regression
         batch_loss /= batch_size
         batch_clf_loss /= batch_size
-        batch_regr_loss /= batch_loss
+        batch_regr_loss /= batch_size
         return batch_loss, batch_clf_loss, batch_regr_loss, detections
 
     def training_step(self, batch, batch_idx):
