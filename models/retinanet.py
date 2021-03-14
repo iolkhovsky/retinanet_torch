@@ -116,7 +116,7 @@ def visualize_prediction_target(inputs, targets, detections, dataformats='CHW', 
 
 class RetinanetLightning(pl.LightningModule):
 
-    def __init__(self, classes_cnt=21, tboard_writer=None, train_batch=2, val_batch=16, dataset_storage=None):
+    def __init__(self, classes_cnt=21, train_batch=2, val_batch=16, dataset_storage=None):
         super().__init__()
         aspect_ratios = [0.5, 1., 2.]
         scales = [2 ** x for x in [0, 1. / 3., 2. / 3.]]
@@ -133,11 +133,20 @@ class RetinanetLightning(pl.LightningModule):
         self.all_anchors = [torch.as_tensor(anchor) for map_anchors in self.anchors for anchor in map_anchors]
         self.all_anchors = torch.stack(self.all_anchors).to(self.device)
         self.max_predictions_per_map = 100
-        self.tboard = tboard_writer
         self.iteration_idx = 0
         self.train_batch_size = train_batch
         self.val_batch_size = val_batch
         self.data_storage = dataset_storage
+        self.train_dataset = None
+        self.val_dataset = None
+
+    def prepare_data(self):
+        self.train_dataset = build_voc2012_for_ssd300(root=self.data_storage, subset="train")
+        self.val_dataset = build_voc2012_for_ssd300(root=self.data_storage, subset="val")
+        """ TODO - Problem with logging graph with multiple outputs
+        if self.logger.experiment:
+            sample_input = torch.rand((1, 3, 300, 300))
+            self.logger.experiment.add_graph(self.model, sample_input)"""
 
     def predict(self, x):
         assert len(x.size()) == 4
@@ -227,10 +236,12 @@ class RetinanetLightning(pl.LightningModule):
         batch = self.batch_to_device(batch, self.device)
 
         total, clf, regr, _ = self.compute_loss(batch)
-        if self.tboard:
-            self.tboard.add_scalar("Loss/TrainTotal", total, global_step=self.iteration_idx)
-            self.tboard.add_scalar("Loss/TrainClassification", clf, global_step=self.iteration_idx)
-            self.tboard.add_scalar("Loss/TrainRegression", regr, global_step=self.iteration_idx)
+        if self.logger.experiment:
+            tboard = self.logger.experiment
+            tboard.add_scalar("Loss/TrainTotal", total, global_step=self.iteration_idx)
+            tboard.add_scalar("Loss/TrainClassification", clf, global_step=self.iteration_idx)
+            tboard.add_scalar("Loss/TrainRegression", regr, global_step=self.iteration_idx)
+        self.log("train_loss", total)
         self.iteration_idx += 1
         return total
 
@@ -239,21 +250,24 @@ class RetinanetLightning(pl.LightningModule):
 
         total, clf, regr, detections = self.compute_loss(batch)
 
-        if self.tboard:
-            self.tboard.add_scalar("Loss/ValTotal", total, global_step=self.iteration_idx)
-            self.tboard.add_scalar("Loss/ValClassification", clf, global_step=self.iteration_idx)
-            self.tboard.add_scalar("Loss/ValRegression", regr, global_step=self.iteration_idx)
+        if self.logger.experiment:
+            tboard = self.logger.experiment
+            tboard.add_scalar("Loss/ValTotal", total, global_step=self.iteration_idx)
+            tboard.add_scalar("Loss/ValClassification", clf, global_step=self.iteration_idx)
+            tboard.add_scalar("Loss/ValRegression", regr, global_step=self.iteration_idx)
+        self.log("val_loss", total)
 
         inputs, targets = batch
         target_imgs, pred_imgs = visualize_prediction_target(inputs, targets, detections, dataformats='CHW',
                                                              to_tensors=True, conf_thresh=0.1)
         img_grid_pred = torchvision.utils.make_grid(pred_imgs)
         img_grid_tgt = torchvision.utils.make_grid(target_imgs)
-        if self.tboard:
-            self.tboard.add_image('Valid/Predicted', img_tensor=img_grid_pred, global_step=self.iteration_idx,
-                                  dataformats='CHW')
-            self.tboard.add_image('Valid/Target', img_tensor=img_grid_tgt, global_step=self.iteration_idx,
-                                  dataformats='CHW')
+        if self.logger.experiment:
+            tboard = self.logger.experiment
+            tboard.add_image('Valid/Predicted', img_tensor=img_grid_pred, global_step=self.iteration_idx,
+                             dataformats='CHW')
+            tboard.add_image('Valid/Target', img_tensor=img_grid_tgt, global_step=self.iteration_idx,
+                             dataformats='CHW')
         return total
 
     def test_step(self, batch, batch_idx):
@@ -264,12 +278,10 @@ class RetinanetLightning(pl.LightningModule):
         return optimizer
 
     def train_dataloader(self):
-        dataset = build_voc2012_for_ssd300(root=self.data_storage, subset="train")
-        return DataLoader(dataset, batch_size=self.train_batch_size, collate_fn=collate_voc2012)
+        return DataLoader(self.train_dataset, batch_size=self.train_batch_size, collate_fn=collate_voc2012)
 
     def val_dataloader(self):
-        dataset = build_voc2012_for_ssd300(root=self.data_storage, subset="val")
-        return DataLoader(dataset, batch_size=self.val_batch_size, collate_fn=collate_voc2012)
+        return DataLoader(self.val_dataset, batch_size=self.val_batch_size, collate_fn=collate_voc2012)
 
     def batch_to_device(self, batch, device):
         inputs, targets = batch
