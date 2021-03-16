@@ -139,6 +139,7 @@ class RetinanetLightning(pl.LightningModule):
         self.data_storage = dataset_storage
         self.train_dataset = None
         self.val_dataset = None
+        self.input_shape = (300, 300)
 
     def prepare_data(self):
         self.train_dataset = build_voc2012_for_ssd300(root=self.data_storage, subset="train")
@@ -164,35 +165,10 @@ class RetinanetLightning(pl.LightningModule):
                 inference_output[imd_idx].append((fmap_clf, fmap_rgr))
         return inference_output
 
-    def decode_output(self, x):
-        assert isinstance(x, list)
+    def decode_prediction(self, x):
         batch_size = len(x)
         detections = [([], []) for _ in range(batch_size)]
         for img_idx, img_predictions in enumerate(x):
-            for fmap_predictions, anchors in zip(img_predictions, self.anchors):
-                clf_pred, rgr_pred = fmap_predictions
-                assert len(clf_pred) == len(rgr_pred) == len(anchors)
-                max_confs, _ = torch.max(clf_pred[:, 1:], dim=1)
-                anchors = torch.as_tensor(anchors)
-
-                _, clf_pred, rgr_pred, anchors = zip(*sorted(zip(max_confs, clf_pred, rgr_pred, anchors),
-                                                             reverse=True,
-                                                             key=lambda x: x[0]))
-                max_predictions = min(len(rgr_pred), self.max_predictions_per_map)
-                clf_pred, rgr_pred, anchors = list(clf_pred), list(rgr_pred), list(anchors)
-                clf_pred, rgr_pred, anchors = torch.stack(clf_pred), torch.stack(rgr_pred), torch.stack(anchors)
-
-                boxes = self.box_coder.decode(rgr_pred[:max_predictions], anchors[:max_predictions])
-                detections[img_idx][0].extend(clf_pred[:max_predictions])
-                detections[img_idx][1].extend(boxes)
-
-        return detections
-
-    def feed_forward(self, x):
-        raw_predictions = self.predict(x)
-        batch_size = len(raw_predictions)
-        detections = [([], []) for _ in range(batch_size)]
-        for img_idx, img_predictions in enumerate(raw_predictions):
             for fmap_predictions, anchors in zip(img_predictions, self.anchors):
                 clf_pred, rgr_pred = fmap_predictions
                 assert len(clf_pred) == len(rgr_pred) == len(anchors)
@@ -204,80 +180,10 @@ class RetinanetLightning(pl.LightningModule):
 
         return detections
 
-    def forward(self, x):
-        raw_predictions = self.predict(x)
-        detections = self.decode_output(raw_predictions)
-        return detections
-
-    @staticmethod
-    def preprocess_frame(cv_img):
-        assert isinstance(cv_img, np.ndarray)
-        assert len(cv_img.shape) == 3
-        height, width, _ = cv_img.shape
-        cv_img = cv2.resize(cv_img, (300, 300))
-        rgb_img = cv2.cvtColor(cv_img, cv2.COLOR_BGR2RGB)
-        rgb_img = rgb_img.astype(np.float32)
-        rgb_img = rgb_img * 1. / 255.
-        rgb_img = normalize_image(rgb_img, mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
-        cyx_img = ndarray_yxc2cyx(rgb_img)
-        cyx_batch = np.expand_dims(cyx_img, axis=0)
-        input_tensor = torch.from_numpy(cyx_batch)
-        return input_tensor
-
-    @staticmethod
-    def visualize(input, detections, conf_thresh=1e-2):
-        target_device = "cpu"
-
-        if isinstance(input, torch.Tensor):
-            if input.device != target_device:
-                input_img = input.to(target_device)
-            input_img = input_img.detach().numpy()
-
-        input_img = input_img[0]
-
-        input_img = ndarray_cyx2yxc(input_img)
-        input_img = denormalize_image(input_img)
-        input_img = (input_img * 255).astype(np.uint8)
-        input_img = cv2.cvtColor(input_img, cv2.COLOR_BGR2RGB)
-
-        img_logits, img_boxes = detections[0]
-        img_logits, img_boxes = torch.stack(img_logits), torch.stack(img_boxes)
-        img_scores = F.softmax(img_logits, dim=1)
-        max_scores, img_labels = torch.max(img_scores, dim=1)
-        positive_detections_mask = torch.logical_and(max_scores >= conf_thresh, img_labels > 0)
-        positive_cnt = torch.sum(positive_detections_mask.int())
-        if positive_cnt == 0:
-            img = input_img.copy()
-            return img
-
-        max_scores = max_scores[positive_detections_mask]
-        img_labels = img_labels[positive_detections_mask]
-        img_boxes = img_boxes[positive_detections_mask]
-
-        predicted_scores, predicted_labels, predicted_boxes = zip(*sorted(zip(max_scores, img_labels, img_boxes),
-                                                                          reverse=True,
-                                                                          key=lambda x: x[0]))
-
-        img = input_img.copy()
-        for score, label, bbox in zip(predicted_scores, predicted_labels, predicted_boxes):
-            if isinstance(score, torch.Tensor):
-                if score.device != target_device:
-                    score = score.to(target_device)
-                score = score.detach().numpy()
-            if isinstance(label, torch.Tensor):
-                if label.device != target_device:
-                    label = label.to(target_device)
-                label = label.detach().numpy()
-            if isinstance(bbox, torch.Tensor):
-                if bbox.device != target_device:
-                    bbox = bbox.to(target_device)
-                bbox = bbox.detach().numpy()
-            img = visuzalize_detection(img, label=label, bbox=bbox, prob=score, color=(0, 0, 255))
-        return img
-
     def compute_loss(self, batch):
         inputs, targets = batch
-        detections = self.feed_forward(inputs)
+        raw_prediction = self.predict(inputs)
+        detections = self.decode_prediction(raw_prediction)
 
         batch_size = max(len(batch), 1)
         batch_loss, batch_clf_loss, batch_regr_loss = 0., 0., 0.
@@ -297,6 +203,85 @@ class RetinanetLightning(pl.LightningModule):
         batch_clf_loss /= batch_size
         batch_regr_loss /= batch_size
         return batch_loss, batch_clf_loss, batch_regr_loss, detections
+
+    def forward(self, x):
+        raw_prediction = self.predict(x)
+        detections = self.decode_prediction(raw_prediction)
+        return detections
+
+    def postprocess(self, x, conf_threshold=0.1, nms=True):
+
+        result = []
+        for img_idx, (img_logits, img_boxes) in enumerate(x):
+
+            img_dict = {"labels": [], "scores": [], "bboxes": []}
+            img_logits, img_boxes = torch.stack(img_logits), torch.stack(img_boxes)
+            img_scores = F.softmax(img_logits, dim=1)
+            max_scores, img_labels = torch.max(img_scores, dim=1)
+            positive_detections_mask = torch.logical_and(max_scores >= conf_threshold, img_labels > 0)
+            positive_cnt = torch.sum(positive_detections_mask.int())
+            if positive_cnt == 0:
+                result.append(img_dict)
+                continue
+
+            max_scores = max_scores[positive_detections_mask]
+            img_labels = img_labels[positive_detections_mask]
+            img_boxes = img_boxes[positive_detections_mask]
+
+            predicted_scores, predicted_labels, predicted_boxes = zip(*sorted(zip(max_scores, img_labels, img_boxes),
+                                                                              reverse=True,
+                                                                              key=lambda x: x[0]))
+            predicted_scores = torch.stack(predicted_scores).detach().numpy()
+            predicted_labels = torch.stack(predicted_labels).detach().numpy()
+            predicted_boxes = torch.stack(predicted_boxes).detach().numpy()
+
+            img_dict["labels"] = predicted_labels
+            img_dict["scores"] = predicted_scores
+            img_dict["bboxes"] = predicted_boxes
+
+            result.append(img_dict)
+
+        if nms:
+            result = [self.non_max_suppression(img_dict) for img_dict in result]
+
+        return result
+
+    @staticmethod
+    def non_max_suppression(detection_dict, iou_thresh=0.5):
+        
+        return detection_dict
+
+    @staticmethod
+    def preprocess_frame(cv_img):
+        assert isinstance(cv_img, np.ndarray)
+        assert len(cv_img.shape) == 3
+        height, width, _ = cv_img.shape
+        cv_img = cv2.resize(cv_img, (300, 300))
+        rgb_img = cv2.cvtColor(cv_img, cv2.COLOR_BGR2RGB)
+        rgb_img = rgb_img.astype(np.float32)
+        rgb_img = rgb_img * 1. / 255.
+        rgb_img = normalize_image(rgb_img, mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+        cyx_img = ndarray_yxc2cyx(rgb_img)
+        cyx_batch = np.expand_dims(cyx_img, axis=0)
+        input_tensor = torch.from_numpy(cyx_batch)
+        return input_tensor
+
+    def visualize(self, cv_img, detections_dict, img_shape=None):
+        img = cv_img.copy()
+        detections_cnt = len(detections_dict["labels"])
+        if img_shape is None:
+            img_shape = self.input_shape
+        ky, kx = img_shape[0] / self.input_shape[0], img_shape[1] / self.input_shape[1]
+        src_img_boxes = []
+        for x, y, w, h in detections_dict["bboxes"]:
+            src_img_boxes.append((x * kx, y * ky, w * kx, h * ky))
+        for detection_idx in range(detections_cnt):
+            img = visuzalize_detection(img,
+                                       label=detections_dict["labels"][detection_idx],
+                                       bbox=src_img_boxes[detection_idx],
+                                       prob=detections_dict["scores"][detection_idx],
+                                       color=(0, 0, 255))
+        return img
 
     def training_step(self, batch, batch_idx):
         batch = self.batch_to_device(batch, self.device)

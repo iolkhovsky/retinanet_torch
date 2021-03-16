@@ -18,8 +18,9 @@ while True:
     cv2.imshow('frame', frame)
 
     input = model.preprocess_frame(frame)
-    detections = model.feed_forward(input)
-    vis = model.visualize(input, detections)
+    detections = model.forward(input)
+    img_detections_dict = model.postprocess(detections, conf_threshold=0.1)[0]
+    vis = model.visualize(frame, img_detections_dict, img_shape=(frame.shape[0], frame.shape[1]))
     cv2.imshow('vis', vis)
 
     if cv2.waitKey(1) & 0xFF == ord('q'):
